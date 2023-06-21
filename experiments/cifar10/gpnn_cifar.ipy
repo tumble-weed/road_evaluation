@@ -1,0 +1,34 @@
+if 'cifar' and True:
+    #!/bin/bash
+    # Call this script from the experiments/cifar10 folder as cwd.
+    # export PYTHONPATH=../../
+    import os
+    import sys
+    if not locals().get('updated_python_path',False):
+        #python_path =os.environ['PYTHONPATH']
+        #new_python_path=f'{python_path}:../../'
+        #%env PYTHONPATH=new_python_path
+        sys.path.append('../../')
+        updated_python_path = True
+    # export DBG_BREAK_ROAD_EVAL="1"
+
+    # CUDA_VISIBLE_DEVICES=, python -m ipdb -c c NoRetrainingMethod.py \
+    #BREAK_NEAR_END=1 CUDA_VISIBLE_DEVICES=, python -m ipdb -c c NoRetrainingMethod.py \
+    #CUDA_VISIBLE_DEVICES=, python -m ipdb -c c NoRetrainingMethod.py \
+    # BREAK_NEAR_END=1 python -m ipdb -c c NoRetrainingMethod.py \
+    #IMPORT_NEW_GPNN=1 python -m ipdb -c c NoRetrainingMethod_imagenet.py \
+    %env IMPORT_NEW_GPNN=1
+    %env DBG_EARLY_BREAK_IN_RUN_ROAD=1
+    %env DBG_ROAD_EVAL_LOOP_BREAK=1
+    os.system('rm result/noretrain_gpnn_sanity.json')
+    os.system("python utils.py --result_file='./result/noretrain_gpnn_sanity.json'")
+    os.system('rm result/noretrain_gpnn_sanity_details.json')
+    os.system("python utils.py --result_file='./result/noretrain_gpnn_sanity_details.json'")    
+    if True:
+        # assert False,'fix the params file'
+        %run NoRetrainingMethod.py \
+            --data_path=/root/evaluate-saliency-4/evaluate-saliency-4/GPNN/road_evaluation/data \
+            --expl_path=/root/evaluate-saliency-4/evaluate-saliency-4/GPNN/road_evaluation/data \
+            --params_file='noretrain_params_gpnn_sanity.json' \
+            --model_path='../../data/cifar_8014.pth'
+        

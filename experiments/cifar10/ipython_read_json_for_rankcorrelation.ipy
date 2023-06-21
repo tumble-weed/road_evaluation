@@ -1,0 +1,50 @@
+
+if 'read-json':
+    import json
+    import numpy as np
+    from icecream import ic
+    superfiles = ['result/retrain_details.json','result/noretrain_details.json']
+    j = superfiles[1]
+    with open(j,'r') as f:
+        data = json.load(f)
+    print(data.keys())
+    imputations = data['imputations']
+    base_methods = data['base_methods']
+    percentages = data['percentages']
+    modifiers = data['modifiers']
+    orders = data['orders']
+    print('is this need to be combinatino or is this a simple concatenation')
+    #import time;time.sleep(5)
+    if False:
+        #attribution_methods = [f'{b}-{m}' for b in base_methods for m in modifiers]
+        #scores = np.zeros((len(attribution_methods),NRUNS,len(perc)))
+        pass
+    attribution_methods = range(8)
+    # TODO_NRUNS = 5
+    probs = {}
+    predictions = {}
+
+
+    for ii,imputation in enumerate(imputations):
+        for ib,base_method in enumerate(base_methods):
+            for im,modifier in enumerate(modifiers):
+                for io,order in enumerate(orders):
+                    for ip,percentage in enumerate(percentages):
+                        print(imputation,base_method,modifier,order)
+
+                        predictions_ = data[imputation][base_method][modifier][order][str(percentage)]['predictions']
+                        probs_ = data[imputation][base_method][modifier][order][str(percentage)]['probs']
+                        if imputation not in probs:
+                            nruns = len(predictions_)
+                            nsamples = predictions_[0].__len__()
+                            if False:
+                                probs[imputation] = np.zeros((nsamples,len(attribution_methods),nruns,len(percentages)))
+                                predictions[imputation] = np.zeros((nsamples,len(attribution_methods),nruns,len(percentages)))
+                            else:
+                                probs[imputation] = np.zeros((10000,8,5,1))
+                                predictions[imputation] = np.zeros((10000,8,5,1))
+                        predictions_ = np.array(predictions_)
+                        probs_ = np.array(probs_)
+                        probs[imputation][:,ib*len(modifiers)+im,:,ip] = probs_.transpose(1,0)
+                        predictions[imputation][:,ib*len(modifiers) + im,:,ip] = predictions_.transpose(1,0)
+                        

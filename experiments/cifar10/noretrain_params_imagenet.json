@@ -1,0 +1,8 @@
+{"basemethod": "smoothgrad",
+"modifiers": ["base"],
+ "imputation": "gpnn",
+ "morf": true,
+ "datafile": "result/noretrain_imagenet.json",
+ "percentages": [0.9],
+ "timeoutdays": 0
+}

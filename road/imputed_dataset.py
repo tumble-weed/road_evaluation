@@ -5,7 +5,9 @@ from torchvision import datasets, models
 
 from .imputations import BaseImputer, ChannelMeanImputer
 from .utils import rescale_channel
-
+import pudb
+import os
+tensor_to_numpy = lambda t:t.detach().cpu().numpy()
 # Dataset classes with imputation.
 class ImputedDataset(torch.utils.data.Dataset):
     """
@@ -66,10 +68,24 @@ class ImputedDataset(torch.utils.data.Dataset):
         """
         if not self.use_cache or index not in self.cached_img:
             img, target = self.base_dataset[index]
+            device = img.device
+            #img.__class__ == torch.Tensor, size (3,32,32)
             pred = self.prediction[index] if self.prediction else 0
             explanation = self.img_mask[index]
+            # explanation.shape == (32,32,3)
+            '''
+            import time;from termcolor import colored
+            W,H,chan = np.array(img).shape
+            explanation = np.ones((W,H,chan))
+            print(colored('mocking explanation','yellow'))
+            time.sleep(5)
+            '''
+            # import ipdb;ipdb.set_trace()
             mask_copy = rescale_channel(explanation)
-            mask_copy += self.random_v
+            random_v = self.random_v
+            if not mask_copy.shape == random_v.shape:
+                random_v = 1e-4*(np.random.randn(*mask_copy.shape[:2]))
+            mask_copy += random_v
             mask_copy = mask_copy.reshape(-1,1)
             mask_copy = torch.tensor(mask_copy)
             # doing this so that it is consistent with all other datasets
@@ -77,7 +93,7 @@ class ImputedDataset(torch.utils.data.Dataset):
             # img = Image.fromarray(img)
             width, height = img.size(-2), img.size(-1)
             salient_order = torch.argsort(mask_copy, axis=0, descending=True) # highest values first.
-            bitmask = torch.ones(width*height, dtype=torch.uint8) # Set to zero if pixel is removed.
+            bitmask = torch.ones(width*height, dtype=torch.uint8, device=device) # Set to zero if pixel is removed.
 
             ## my modification
             if self.remove:
@@ -89,6 +105,7 @@ class ImputedDataset(torch.utils.data.Dataset):
             bitmask = bitmask.reshape(width, height)
 
             # Call the imputor.
+            # import ipdb;ipdb.set_trace()
             img = self.imputation(img, bitmask)
         
 
@@ -105,7 +122,8 @@ class ImputedDataset(torch.utils.data.Dataset):
             img = self.transform(img)
         if self.target_transform is not None:
             target = self.target_transform(target)
-
+        if os.environ.get('DBG_IMAGENET',False) == '1':
+            pudb.set_trace()
         return img, target, pred
 
     def __len__(self):

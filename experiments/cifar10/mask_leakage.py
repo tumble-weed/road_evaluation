@@ -46,6 +46,8 @@ class Modified_Dataset(torchvision.datasets.CIFAR10):
 		"""
 		_, target = datasets.CIFAR10.__getitem__(self, index)
 		explanation = self.img_mask[index]
+        print('see what rescale_channel does')
+        from ipdb import set_trace as set_trace49;set_trace49()
 		mask_copy = rescale_channel(explanation).flatten()
 		#print(mask_copy.shape, mask_copy[:5,:5])
 		mask_copy = torch.tensor(mask_copy)
@@ -57,6 +59,9 @@ class Modified_Dataset(torchvision.datasets.CIFAR10):
 		#print(salient_order[:20])
 		bitmask = torch.ones(width*height, dtype=torch.uint8) # Set to zero if pixel is removed.
 
+        print('what is the value of th_p?. we retain certain coordinates?')
+        from ipdb import set_trace as set_trace63;set_trace63()
+
 		if self.remove:
 			coords = salient_order[:int(width*height*self.th_p)]
 			mean = 1-self.th_p
@@ -64,10 +69,11 @@ class Modified_Dataset(torchvision.datasets.CIFAR10):
 			coords = salient_order[int(width*height*(self.th_p)):]
 			mean = self.th_p
 			#print(len(coords))
+        print('TODO: setting the first few coordinates to a high or low value?')
 		bitmask[coords] = 0
 		bitmask = bitmask.reshape(1, width, height).repeat(3, 1, 1)
 		#print(bitmask.shape)
-		
+	    print('TODO: check if bitmask - mean adds up to a certain value')	
 		return bitmask-mean, target, 0
 
 def train_val_net(model, trainloader, testloader, criterion, optimizer, scheduler, epoch, SAVE=False):

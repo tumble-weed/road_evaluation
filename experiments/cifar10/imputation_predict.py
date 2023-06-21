@@ -1,6 +1,11 @@
 # Repeatedly train the imputation predictor to assess mask leakage in different attribution maps.
 # See comments in ImputationPrediction.py for some more descriptions.
-
+import os
+root_dir = os.path.realpath(os.path.join(os.path.dirname(__file__),'../../'))
+print(root_dir)
+import sys
+sys.path.append(root_dir)
+import register_ipdb
 from logging import PercentStyle
 from unittest.util import three_way_cmp
 import torch
@@ -23,8 +28,11 @@ import json
 
 from road.utils import *
 from road.gpu_dataloader import ImputedDatasetMasksOnly
-from road.imputations import ZeroImputer, ChannelMeanImputer, NoisyLinearImputer
-device="cuda:1"
+from road.imputations import ZeroImputer, ChannelMeanImputer, NoisyLinearImputer, GAINImputer, GPNNImputer
+from termcolor import colored
+import colorful
+from icecream import ic
+device="cuda:0"
 batch_size = 32
 learning_rate = 5e-5
 
@@ -127,13 +135,25 @@ if __name__ == "__main__":
     """ Main functions. Test different percentages, fixed/linear imputations and perform multiple repetitions.
         Save the results to some JSON file named imputation_results.json in a dict format.
     """
-    percentages = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
-    imputations = ["fixed", "linear", "gan"]
+    NREPS = 10
+    PURGE = True
+    RESULTS_FILE = "imputation_results.json"
+    # percentages = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+    percentages = [0.9]
+    print(colorful.red(f'setting percentages to {percentages}, to see if gpn struggles'))
+    # imputations = ["fixed", "linear", "gan","gpnn"]
+    imputations = ["gpnn"]
+    print(colorful.red(f'setting imputation to {imputations}'))
     my_imputers = {"fixed": ZeroImputer(), "linear": NoisyLinearImputer(noise=0.05), 
-                   "gan": GAINImputer("../../road/gisp/models/cifar_10_best.pt", use_device=(device)}
-
-    if os.path.exists("imputation_results.json"):
-        results = json.load(open("imputation_results.json"))
+    "gan": GAINImputer("../../road/gisp/models/cifar_10_best.pt", use_device=(device)),
+    "gpnn":GPNNImputer()
+    }
+    if PURGE:
+        print(colored('deleting past results file','yellow'))
+        import time;time.sleep(5)
+        os.system(f'rm {RESULTS_FILE}')
+    if os.path.exists(RESULTS_FILE):
+        results = json.load(open(RESULTS_FILE))
         print("Loading old results...")
     else:
         results = {}
@@ -141,11 +161,12 @@ if __name__ == "__main__":
         results["thresholds"] = percentages
         results["imputations"] = imputations
         results["data"] = {}
-    for reps in range(10):
+    # import ipdb;ipdb.set_trace()
+    for reps in range(NREPS):
         for th_p in percentages:
             if str(th_p) not in results["data"]:
                 results["data"][str(th_p)] = {}
-            for imputation in ["fixed", "linear"]:
+            for imputation in imputations:
                 print("Imputation:", imputation, "Percentage:", th_p)
                 train_set_org, test_set_org = create_data_sets(p=th_p)
                 trainloader = torch.utils.data.DataLoader(train_set_org, batch_size=batch_size, shuffle=True, num_workers=8)
@@ -165,6 +186,10 @@ if __name__ == "__main__":
                     else:
                         ep_no_improve = 0
                     last_acc = acc
+                    if os.environ.get('DBG_EARLY_IMPUTATION_PREDICT_BREAK','0') == '1':
+                        if epoch >1:
+                            break
+                    
                 if imputation not in results["data"][str(th_p)]:
                     results["data"][str(th_p)][imputation] =[acc]
                 else:

@@ -1,0 +1,8 @@
+{"basemethod": "ig",
+ "modifiers": ["base", "sg", "sq", "var"],
+ "imputation": "gpnn",
+ "morf": false,
+ "datafile": "result/noretrain.json",
+ "percentages": [0.9],
+ "timeoutdays": 0
+}

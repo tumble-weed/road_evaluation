@@ -1,1 +1,1 @@
-{"percentages": [], "base_methods": [], "modifiers": [], "dataset": "cifar10", "imputations": [], "orders": []}
+{"percentages": [0.1], "base_methods": ["ig"], "modifiers": ["base"], "dataset": "cifar10", "imputations": ["linear"], "orders": ["morf"], "linear": {"ig": {"base": {"morf": {"0.1": ["pending03-02-2023,11:03:18"]}}}}}

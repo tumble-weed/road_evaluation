@@ -2,7 +2,9 @@ import pickle
 import json
 from datetime import datetime
 import argparse
-
+import os
+# from utils import getresultslist_details
+import jdata
 def load_dict(filename):
     with open(filename, 'rb') as f:
         di = pickle.load(f)
@@ -36,6 +38,7 @@ def create_empty_evaluation_file(filepath, dataset):
     res_dict["imputations"] = []
     res_dict["orders"] = []
     json.dump(res_dict, open(filepath, "w"))
+    # import ipdb;ipdb.set_trace()
     
 
 def append_evaluation_result(value: float, filepath: str, imputation: str, base_method: str,
@@ -123,6 +126,7 @@ def getresultslist(filepath: str, imputation: str, base_method: str,
     return res_dict, target_list
 
 def merge_new_results(file_old, file_new):
+    import ipdb;ipdb.set_trace()
     res_dict2 = json.load(open(file_new))
     for im in res_dict2["imputations"]:
         res = res_dict2[im]
@@ -148,6 +152,38 @@ def update_eval_result(value: float, filepath: str, imputation: str, base_method
     res_dict, mylist = getresultslist(filepath, imputation, base_method, modifier, use_morf, percentage_value)
     mylist[run_id] = value
     json.dump(res_dict, open(filepath, "w"))
+    # import ipdb;ipdb.set_trace()
+
+
+def update_eval_result_details(test_predictions, test_probs,filepath: str, imputation: str, base_method: str, modifier: str, use_morf: bool, percentage_value: float, run_id: int):
+    res_dict,target_list_predictions,target_list_probs = getresultslist_details(filepath, imputation, base_method,
+        modifier, use_morf, percentage_value)
+    # mylist[run_id] = value
+    target_list_predictions[run_id] = list(test_predictions.astype(int))
+    target_list_probs[run_id] = list(test_probs)
+    # json.dump(res_dict, open(storage_file_details, "w"))
+    jdata.save(res_dict, filepath)
+def get_missing_run_parameters_details(filepath, imputation, order: bool, base_method, modifiers, percentages, target_num_runs=5, timeout=3):
+    """ Return a tuple of percentage value, runID, that still needs to be computed. """
+    for mod in modifiers:
+        for p in percentages:
+            res_dict, mylist_predictions,mylist_probs = getresultslist_details(filepath, imputation, base_method, mod, order, p)
+            # Clean outdated runs
+            for k in range(len(mylist_predictions)):
+                if str(mylist_predictions[k])[:7] == "pending":
+                    last_date = datetime.strptime(mylist_probs[k][7:], "%d-%m-%Y,%H:%M:%S")
+                    if (datetime.now()-last_date).days >= timeout:
+                        print("Found outdated pending run...")
+                        mylist_predictions[k] = "pending"+datetime.now().strftime("%d-%m-%Y,%H:%M:%S")
+                        mylist_probs[k] = "pending"+datetime.now().strftime("%d-%m-%Y,%H:%M:%S")
+                        json.dump(res_dict, open(filepath, "w"))
+                        return (mod, p, k)
+            if len(mylist_predictions) < target_num_runs:
+                mylist_predictions.append("pending"+datetime.now().strftime("%d-%m-%Y,%H:%M:%S"))
+                mylist_probs.append("pending"+datetime.now().strftime("%d-%m-%Y,%H:%M:%S"))
+                json.dump(res_dict, open(filepath, "w"))
+                return (mod, p, len(mylist_predictions)-1)
+    return None
 
 def get_missing_run_parameters(filepath, imputation, order: bool, base_method, modifiers, percentages, target_num_runs=5, timeout=3):
     """ Return a tuple of percentage value, runID, that still needs to be computed. """
@@ -155,6 +191,8 @@ def get_missing_run_parameters(filepath, imputation, order: bool, base_method, m
         for p in percentages:
             res_dict, mylist = getresultslist(filepath, imputation, base_method, mod, order, p)
             # Clean outdated runs
+            if os.environ.get('STOP_IN_GET_MISSING',False) == '1':
+                import ipdb;ipdb.set_trace()
             for k in range(len(mylist)):
                 if str(mylist[k])[:7] == "pending":
                     last_date = datetime.strptime(mylist[k][7:], "%d-%m-%Y,%H:%M:%S")
@@ -167,6 +205,7 @@ def get_missing_run_parameters(filepath, imputation, order: bool, base_method, m
                 mylist.append("pending"+datetime.now().strftime("%d-%m-%Y,%H:%M:%S"))
                 json.dump(res_dict, open(filepath, "w"))
                 return (mod, p, len(mylist)-1)
+            
     return None
 
 
@@ -188,6 +227,8 @@ def arg_parse():
                         help="set random seed")
     parser.add_argument("--result_file", type=str,
                         help="filename of the json file to save the results")
+    parser.add_argument("--result_file_details", type=str,
+                        help="filename of the json file to save the detailed results")
     parser.add_argument("--dataset", type=str,
                         help="the name of the dataset. E.g., cifar10")
     parser.add_argument("--params_file", type=str,
@@ -207,8 +248,64 @@ def arg_parse():
 
     return parser.parse_args()
 
+def getresultslist_details(filepath: str, imputation: str, base_method: str,
+       modifier: str, use_morf: bool, percentage_value: float):
 
+    """ Append an evaluation result to an existing JSON file.
+        only_new_idx: only append this result, if the number of results present is smaller than only_new_idx.
+            -1 means always append.
+        return True if the results were appended.
+    """
+    res_dict = json.load(open(filepath))
+    if imputation not in res_dict["imputations"]:
+        res_dict["imputations"].append(imputation)
+        res_dict[imputation] = {}
+
+    target_dict = res_dict[imputation]
+
+    if base_method not in res_dict["base_methods"]:
+        res_dict["base_methods"].append(base_method)
+    if base_method not in target_dict.keys():
+        target_dict[base_method] = {}
+    target_dict = target_dict[base_method]
+
+    if modifier not in res_dict["modifiers"]:
+        res_dict["modifiers"].append(modifier)
+    if modifier not in target_dict.keys():
+        target_dict[modifier] = {}
+    target_dict = target_dict[modifier]
+
+    morfstr = "morf" if use_morf else "lerf"
+    if morfstr not in res_dict["orders"]:
+        res_dict["orders"].append(morfstr)
+    if morfstr not in target_dict.keys():
+        target_dict[morfstr] = {}
+    target_dict = target_dict[morfstr]
+
+    if percentage_value not in res_dict["percentages"]:
+        res_dict["percentages"].append(percentage_value)
+    
+    # if 'predictions' not in target_dict.keys():
+    #     target_dict['predictions'] = {str(percentage_value):[]}
+    # if 'probs' not in target_dict.keys():
+    #     target_dict['probs'] = {str(percentage_value):[]}
+        
+    # if str(percentage_value) not in target_dict['predictions'].keys():
+    #     target_dict['predictions'][str(percentage_value)] = []
+    #     target_dict['probs'][str(percentage_value)] = []
+    # target_dict = target_dict[str(percentage_value)]
+    '''
+    target_list_prediction = target_dict['predictions'][str(percentage_value)]
+    target_list_probs = target_dict['probs'][str(percentage_value)]
+    '''
+    if str(percentage_value) not in target_dict.keys():
+        target_dict[str(percentage_value)] = {'predictions':[],'probs':[]}
+    target_list_prediction = target_dict[str(percentage_value)]['predictions']
+    target_list_probs = target_dict[str(percentage_value)]['probs']    
+    return res_dict,target_list_prediction,target_list_probs
 if __name__ == '__main__':
     args = arg_parse()
-    print("Generate a result json file at %s for the dataset %s."%(args.result_file, args.dataset))
-    create_empty_evaluation_file(args.result_file, args.dataset)
+    if args.result_file is not None:
+        print("Generate a result json file at %s for the dataset %s."%(args.result_file, args.dataset))
+        create_empty_evaluation_file(args.result_file, args.dataset)
+        

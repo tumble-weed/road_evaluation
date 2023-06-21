@@ -1,0 +1,1 @@
+{"percentages": [0.9], "base_methods": ["smoothgrad"], "modifiers": ["base"], "dataset": "cifar10", "imputations": ["gpnn"], "orders": ["morf"], "gpnn": {"smoothgrad": {"base": {"morf": {"0.9": [0.0]}}}}}

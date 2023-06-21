@@ -1,0 +1,2 @@
+MULTI_SCRIPT="run_multi.sh"
+PS_MULTI="ps aux | grep $MULTI_SCRIPT"

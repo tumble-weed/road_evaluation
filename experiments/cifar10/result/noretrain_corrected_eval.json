@@ -1,0 +1,1 @@
+{"percentages": [0.1], "base_methods": ["ig"], "modifiers": ["base"], "dataset": "cifar10", "imputations": ["linear"], "orders": ["morf", "lerf"], "linear": {"ig": {"base": {"morf": {"0.1": ["pending29-01-2023,12:44:33"]}, "lerf": {"0.1": [0.002199999988079071, 0.002199999988079071, 0.002300000051036477, "pending29-01-2023,13:00:12"]}}}}}

@@ -4,7 +4,9 @@ import numpy as np
 from scipy.sparse import lil_matrix, csc_matrix
 from scipy.sparse.linalg import spsolve
 from road.gisp.models.gsmv import GNet_ResNet
-
+import os
+import pudb
+import colorful
 class BaseImputer():
     def __call__(self, img: torch.Tensor, mask: torch.Tensor)-> torch.Tensor:
         """ Call the Imputation function to fill the masked pixels in an image.
@@ -212,3 +214,176 @@ def _from_str(imputer_str):
                 "needs to be passed. Please use the explicit constructor of road.imputations.GAINImputer.")
     else:
         raise ValueError("Unknown imputer string. Please use {linear, fixed, zero}.")
+    
+    
+#==================================================================================
+import sys
+class AddPath():
+    def __init__(self,d):
+        print('TODO: move this to another file')
+        self.d = d
+
+        pass
+    def __enter__(self):
+        self.at = len(sys.path)
+        sys.path.append(self.d)        
+        pass
+    def __exit__(self,*args):
+        del sys.path[self.at]
+        pass
+
+
+with AddPath('/root/evaluate-saliency-4/GPNN_for_road'):
+    import dutils
+    from model.my_gpnn_inpainting import gpnn
+    # from model.my_gpnn_inpainting import gpnn
+    # from model.my_gpnn_inpainting_new import gpnn
+    tensor_to_numpy = lambda t:t.detach().cpu().numpy()
+    def denormalize_imagenet(t,vgg_mean=[0.485, 0.456, 0.406],
+                    vgg_std=[0.229, 0.224, 0.225]):
+        device = t.device
+        out = (t )*torch.tensor(vgg_std).to(device)[None,:,None,None] + torch.tensor(vgg_mean).to(device)[None,:,None,None]
+        return out
+    class GPNNImputer:
+        def __init__(self):
+            print('TODO: how do i add the path to gpnn?')
+            print('TODO: eventually will need to move gpnn to this dir')
+            """    
+                Noisy linear imputation.    
+                noise: magnitude of noise to add (absolute, set to 0 for no noise)
+                weighting: Weights of the neighboring pixels in the computation. 
+                List of tuples of (offset, weight)
+            """
+        
+
+
+        def __call__(self, img: torch.Tensor, mask: torch.Tensor):
+            if (img < 0).any() or (img > 1).any():
+                print('did not expect img to have negative values')
+                import ipdb;ipdb.set_trace()
+            UPSIZE = True
+            img_orig = img
+            mask_orig = mask
+            if UPSIZE:
+                # import ipdb;ipdb.set_trace()
+                print(colorful.orchid('move the upsize to inpainting with a flag, and use masked_convolution'))
+                UPSIZE_FACTOR = 3
+                print(img.shape)
+                print(mask.shape)
+                up_img = torch.nn.functional.interpolate(img[None,...],size=(img.shape[-2]*UPSIZE_FACTOR,img.shape[-1]*UPSIZE_FACTOR),mode='nearest')
+                up_mask = torch.nn.functional.interpolate(mask[None,None,...],size=(img.shape[-2]*UPSIZE_FACTOR,img.shape[-1]*UPSIZE_FACTOR),mode='nearest')
+                up_img = up_img[0]
+                up_mask = up_mask[0,0]
+                img = up_img
+                mask = up_mask       
+                if 'check' and False:
+                    re_img_orig = torch.nn.functional.interpolate(img[None,...],size=img_orig.shape[-2:],mode='nearest')[0]
+                    print((img_orig -re_img_orig).abs().sum())
+            # import ipdb;ipdb.set_trace()
+            with AddPath('/root/evaluate-saliency-4/GPNN_for_road'):
+                mask = mask.float()
+                config = {
+                    'out_dir':'gpnn-eval/output',
+                    'iters':1,
+                    # 'iters':1,#10
+                    'coarse_dim':14,#
+                    # 'coarse_dim':28,
+                    # 'coarse_dim':100,#
+                    'out_size':0,
+                    'patch_size':3,
+                    # 'patch_size':7,
+                    # 'patch_size':15,
+                    'stride':1,
+                    # 'pyramid_ratio':8/7,
+                    'pyramid_ratio':4/3,
+                    # 'pyramid_ratio':2,
+                    'faiss':True,
+                    # 'faiss':False,
+                    'no_cuda':False,
+                    #---------------------------------------------
+                    'in':None,
+                    'sigma':4*0.75,
+                    # 'sigma':0.3*0.75,
+                    'alpha':0.005,
+                    'task':'inpainting',
+                    #---------------------------------------------
+                    # 'input_img':original_imname,
+                    # 'input_img':tensor_to_numpy(denormalize_imagenet(img.unsqueeze(0)).permute(0,2,3,1)[0]),
+                    'input_img':tensor_to_numpy((img.unsqueeze(0)).permute(0,2,3,1)[0]),
+                    # NOTE: the mask arrives with 0's at holes. need to flip it
+                    'mask':tensor_to_numpy(1 - mask),
+                    'batch_size':10,
+                    #---------------------------------------------
+                    'implementation':'gpnn',#'efficient-gpnn','gpnn'
+                    'init_from':'zeros',#'zeros','target'
+                    'keys_type':'single-resolution',#'multi-resolution','single-resolution'
+                    #---------------------------------------------
+                    'use_pca':False,
+                    'n_pca_components':10,
+                    #---------------------------------------------
+                    'patch_aggregation':'uniform',#'uniform','distance-weighted','median'
+                    # 'imagenet_target':imagenet_target
+                    #---------------------------------------------
+                    'index_type':'brute-force',
+                    'use_xy':True,
+                    }
+                gpnn_inpainting = gpnn(config)
+                holefilled,holefilling_results = gpnn_inpainting.run(to_save=False)
+                if True:
+                    holefilled_bchw = tensor_to_numpy(holefilled[:,:3])
+                    mask_bchw = (config['mask'][None,None,...])
+                    input_img_bchw = config['input_img'].transpose(2,0,1)[None,...]
+                    corruption = np.abs(holefilled_bchw * (1 - mask_bchw) - input_img_bchw* (1 - mask_bchw)).sum()
+                    print(corruption)
+                                
+                # import ipdb;ipdb.set_trace()
+                # pudb.set_trace()
+                area = config['mask'].sum().item()
+                if False:
+                    import dutils
+                    dutils.img_save(tensor_to_numpy(1-mask),f'imputation_mask_{int(area)}.png')
+                    dutils.img_save(tensor_to_numpy(img[:,:3].permute(1,2,0)),f'imputation_img_{int(area)}.png')
+                    
+                    dutils.img_save(tensor_to_numpy(holefilled[:,:3].permute(0,2,3,1)[0]),f'imputed_{int(area)}.png')
+
+
+
+                # """ Our linear inputation scheme. """
+                # """
+                # This is the function to do the linear infilling 
+                # img: original image (C,H,W)-tensor;
+                # mask: mask; (H,W)-tensor
+
+                # """
+                # imgflt = img.reshape(img.shape[0], -1)
+                # maskflt = mask.reshape(-1)
+                # # Indices that need to be imputed.
+                # indices_linear = np.argwhere(maskflt==0).flatten() 
+                # # Set up sparse equation system, solve system.
+                # A, b = GPNNImputer.setup_sparse_system(mask.numpy(), 
+                #     img.numpy(), neighbors_weights)
+                # res = torch.tensor(spsolve(csc_matrix(A), b), dtype=torch.float)
+
+                # # Fill the values with the solution of the system.
+                # img_infill = imgflt.clone()
+                # img_infill[:, indices_linear] = res.t() + self.noise*torch.randn_like(res.t())
+                    
+                # return img_infill.reshape_as(img)
+
+                assert holefilled.shape[-2:] == img.shape[-2:]
+                assert holefilled.shape[1] in [3,5]
+                out_img = holefilled[0,:3]
+                out_img = torch.nn.functional.interpolate(out_img[None,...],img_orig.shape[-2:],mode='nearest')[0]
+                # import ipdb;ipdb.set_trace()
+                return out_img
+
+        def batched_call(self, img: torch.Tensor, mask: torch.Tensor):
+            # import ipdb;ipdb.set_trace()
+            """ Pseudo implementation of batched interface. """
+            res_list = []
+            in_device = img.device
+            for i in range(len(img)):
+                res_list.append(self.__call__(img[i], mask[i]))
+            return torch.stack(res_list).to(in_device)    
+    #================================================================================
+DummyGPNNImputer = ZeroImputer
