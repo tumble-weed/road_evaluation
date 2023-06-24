@@ -1,4 +1,6 @@
 import argparse
+import os
+SAVE_ROOT="/root/bigfiles/road_evaluation"
 
 def arg_parse():
     parser = argparse.ArgumentParser()
@@ -23,10 +25,10 @@ def arg_parse():
     parser.set_defaults(batch_size=32,
                         gpu=True,
                         expl_method='ig',
-                        input_path='./data',
-                        save_path='./data',
+                        input_path=os.path.join(SAVE_ROOT,'./data'),
+                        save_path=os.path.join(SAVE_ROOT,'./data'),
                         seed=42,
-                        model_path='../../data/cifar_8014.pth'
+                        model_path=os.path.join(SAVE_ROOT,'./data/cifar_8014.pth')
                         )
 
     return parser.parse_args()
